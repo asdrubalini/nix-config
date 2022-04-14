@@ -10,7 +10,7 @@ let
 in {
   imports = [
     ../hardware/radeon.nix
-    ../hardware/nvidia-prime.nix
+    # ../hardware/nvidia-prime.nix
     ../hardware/pipewire.nix
     ../desktop/fonts.nix
 
@@ -22,22 +22,31 @@ in {
   # Hardware
   boot.initrd.availableKernelModules =
     [ "xhci_pci" "nvme" "ahci" "uas" "usb_storage" "usbhid" "sd_mod" ];
-  boot.initrd.kernelModules = [ ];
-  boot.kernelModules = [ "kvm-amd" ];
+
+  boot.kernelModules =
+    [ "kvm-amd" "vfio" "vfio_iommu_type1" "vfio_pci" "vfio_virqfd" ];
+  boot.initrd.kernelModules =
+    [ "vfio_virqfd" "vfio_pci" "vfio_iommu_type1" "vfio" ];
+  boot.blacklistedKernelModules = [ "nvidia" "nouveau" ];
+
   boot.extraModulePackages = [ ];
+
   boot.zfs = {
     enableUnstable = true;
     forceImportAll = false;
   };
+
   boot.kernelParams = [
-    "zfs.zfs_arc_max=1073741824" # 1 GiB
-    "nohibernate"
+    "zfs.zfs_arc_max=268435456" # 256 MiB
+    "nohibernate" # Hibernation does not work with ZFS
+    "amd_iommu=on"
+    "iommu=pt"
   ];
 
   boot.supportedFilesystems = [ "zfs" ];
 
-  # Enable nested virtualization
-  boot.extraModprobeConfig = "options kvm_amd nested=1";
+  boot.extraModprobeConfig =
+    "options kvm_amd nested=1 vfio-pci.ids=10de:1f15,10de:10f9,10de:1ada,10de:1adb";
 
   fileSystems."/" = {
     device = "rpool/local/root";
@@ -87,6 +96,14 @@ in {
 
   nixpkgs.config.allowUnfree = true;
 
+  hardware = {
+    opengl = {
+      enable = true;
+      driSupport = true;
+      driSupport32Bit = true;
+    };
+  };
+
   boot = {
     loader = {
       systemd-boot.enable = true;
@@ -96,7 +113,7 @@ in {
       };
     };
     loader.efi.canTouchEfiVariables = true;
-    kernelPackages = pkgs.linuxPackages_zen;
+    kernelPackages = pkgs.linuxPackages_latest;
   };
 
   networking.hostName = "swan";
@@ -114,9 +131,9 @@ in {
   '';
 
   # Erase your darlings.
-  boot.initrd.postDeviceCommands = lib.mkAfter ''
-    zfs rollback -r rpool/local/root@blank
-  '';
+  # boot.initrd.postDeviceCommands = lib.mkAfter ''
+  # zfs rollback -r rpool/local/root@blank
+  # '';
 
   services.zfs.autoSnapshot = {
     enable = true;
@@ -171,13 +188,25 @@ in {
     wait-ac
     git
     systemApply
+
+    OVMF
+    qemu
+    virt-manager
+    swtpm
   ];
 
   virtualisation.docker = {
     enable = true;
     extraOptions = "--data-root=/mnt/docker";
   };
-  virtualisation.libvirtd.enable = true;
+
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu.verbatimConfig = ''
+      nvram = [ "${pkgs.OVMF}/FV/OVMF.fd:${pkgs.OVMF}/FV/OVMF_VARS.fd" ]
+    '';
+  };
+
   services.tlp.enable = true;
 
   nix = {
@@ -268,9 +297,8 @@ in {
   #sessionPackages = with pkgs; [ sway ];
   #};
 
-  # users.users."giovanni".openssh.authorizedKeys.keys = [
-  # (import ../ssh-keys/looking-glass.nix).key
-  # ];
+  users.users."giovanni".openssh.authorizedKeys.keys =
+    [ (import ../ssh-keys/looking-glass.nix).key ];
 
   # networking.firewall.allowedTCPPorts = [ ...];
   # networking.firewall.allowedUDPPorts = [ ... ];

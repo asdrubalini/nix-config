@@ -84,7 +84,7 @@ in {
 
       gaps.inner = 12;
       window.border = 1;
-      floating.border = 1;
+      floating.border = 2;
 
       keybindings = {
         # Basics

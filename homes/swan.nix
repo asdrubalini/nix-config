@@ -54,6 +54,7 @@ in {
     git
     bat
     jq
+    wdisplays
 
     # Browsers
     firefox
@@ -83,7 +84,6 @@ in {
 
     # Virtual
     quickemu
-    virt-manager
 
     # Misc
     wpa_supplicant_gui
